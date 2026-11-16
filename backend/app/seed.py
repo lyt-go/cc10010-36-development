@@ -3,6 +3,97 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.notifyevent_keys import idempotency_key
+
+
+def _notify_event(
+    event_id: int,
+    *,
+    batch_no: str,
+    sla_id: int,
+    sla_code: str,
+    job: str,
+    group: str,
+    channel_id: int,
+    channel_code: str,
+    channel_type: str,
+    address: str,
+    template: str,
+    status: str,
+    result: str,
+    attempts: int,
+    receipt_no: str | None,
+    receipt_status: str | None,
+    adopted: bool,
+    redundant: bool,
+    quiet_note: str,
+    created: str,
+    pending: bool,
+    abnormal: bool,
+) -> dict[str, Any]:
+    """构造一条通知投递事件示例，字段口径与 NotifyeventService 保持一致。"""
+    return {
+        "id": event_id,
+        "事件编号": f"NEVT-{event_id:04d}",
+        "幂等键": idempotency_key(sla_id, channel_id),
+        "批次编号": batch_no,
+        "批次编号列表": [batch_no],
+        "SLA规则ID": sla_id,
+        "规则编号": sla_code,
+        "适用作业": job,
+        "值班组": group,
+        "渠道ID": channel_id,
+        "渠道编号": channel_code,
+        "渠道类型": channel_type,
+        "接收地址": address,
+        "消息编号": f"MSG-{sla_id:04d}-{channel_id:04d}",
+        "消息模板": template,
+        "事件状态": status,
+        "送达结果": result,
+        "投递尝试次数": attempts,
+        "最大尝试次数": 3,
+        "最近尝试时间": created,
+        "回执编号": receipt_no,
+        "回执状态": receipt_status,
+        "采纳记录": adopted,
+        "冗余送达": redundant,
+        "静默时段结果": quiet_note,
+        "快照版本": None,
+        "创建时间": created,
+        "更新时间": created,
+        "pending": pending,
+        "abnormal": abnormal,
+    }
+
+
+def _notify_receipt(
+    receipt_id: int,
+    *,
+    event_id: int,
+    event_no: str,
+    message_no: str,
+    idem_key: str,
+    channel_id: int,
+    receipt_type: str,
+    receipt_status: str,
+    detail: str,
+    registered: str,
+) -> dict[str, Any]:
+    return {
+        "id": receipt_id,
+        "回执编号": f"RECP-{receipt_id:04d}",
+        "事件ID": event_id,
+        "事件编号": event_no,
+        "消息编号": message_no,
+        "幂等键": idem_key,
+        "渠道ID": channel_id,
+        "回执类型": receipt_type,
+        "回执状态": receipt_status,
+        "回执详情": detail,
+        "登记时间": registered,
+    }
+
+
 SEED_ROWS: dict[str, list[dict[str, Any]]] = {
     "etljob": [{'id': 1,
   'status': '草稿',
@@ -617,3 +708,123 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
   '审批人': '发布计划样例3',
   '发布状态': '发布计划样例3'}]
 }
+
+
+# ---------------------------------------------------------------- 通知投递事件演示数据
+# 场景覆盖：多SLA命中同一值班组、多渠道路由（采纳/冗余）、失败重试、静默抑制、重复回执。
+_DEMO_EVENTS = [
+    _notify_event(
+        1, batch_no="BATCH-0001", sla_id=1, sla_code="SLAV-0001", job="SLA监控样例1",
+        group="数据值班组A", channel_id=1, channel_code="NOTI-0001",
+        channel_type="通知渠道样例1", address="通知渠道样例1", template="通知渠道样例1",
+        status="已确认送达", result="送达成功", attempts=1,
+        receipt_no="RECP-0001", receipt_status="送达确认",
+        adopted=True, redundant=False, quiet_note="不在静默时段",
+        created="2026-11-16 09:05:00", pending=False, abnormal=False,
+    ),
+    _notify_event(
+        2, batch_no="BATCH-0001", sla_id=1, sla_code="SLAV-0001", job="SLA监控样例1",
+        group="数据值班组A", channel_id=3, channel_code="NOTI-0003",
+        channel_type="通知渠道样例3", address="通知渠道样例3", template="通知渠道样例3",
+        status="已送达", result="送达成功", attempts=1,
+        receipt_no="RECP-0002", receipt_status="送达确认",
+        adopted=False, redundant=True, quiet_note="不在静默时段",
+        created="2026-11-16 09:07:00", pending=False, abnormal=False,
+    ),
+    _notify_event(
+        3, batch_no="BATCH-0001", sla_id=2, sla_code="SLAV-0002", job="SLA监控样例2",
+        group="数据值班组A", channel_id=1, channel_code="NOTI-0001",
+        channel_type="通知渠道样例1", address="通知渠道样例1", template="通知渠道样例1",
+        status="已确认送达", result="送达成功", attempts=1,
+        receipt_no="RECP-0004", receipt_status="送达确认",
+        adopted=True, redundant=False, quiet_note="不在静默时段",
+        created="2026-11-16 09:20:00", pending=False, abnormal=False,
+    ),
+    _notify_event(
+        4, batch_no="BATCH-0001", sla_id=3, sla_code="SLAV-0003", job="SLA监控样例3",
+        group="数据值班组B", channel_id=2, channel_code="NOTI-0002",
+        channel_type="通知渠道样例2", address="通知渠道样例2", template="通知渠道样例2",
+        status="静默抑制", result="静默时段抑制", attempts=0,
+        receipt_no=None, receipt_status=None,
+        adopted=False, redundant=False,
+        quiet_note="当前 23:10 落在静默时段 23:00~07:00",
+        created="2026-11-16 23:10:00", pending=False, abnormal=False,
+    ),
+    _notify_event(
+        5, batch_no="BATCH-0001", sla_id=2, sla_code="SLAV-0002", job="SLA监控样例2",
+        group="数据值班组B", channel_id=3, channel_code="NOTI-0003",
+        channel_type="通知渠道样例3", address="通知渠道样例3", template="通知渠道样例3",
+        status="投递失败", result="送达失败", attempts=2,
+        receipt_no="RECP-0005", receipt_status="失败回执",
+        adopted=False, redundant=False, quiet_note="不在静默时段",
+        created="2026-11-16 10:02:00", pending=True, abnormal=True,
+    ),
+]
+
+_DEMO_RECEIPTS = [
+    _notify_receipt(
+        1, event_id=1, event_no="NEVT-0001", message_no="MSG-0001-0001",
+        idem_key=idempotency_key(1, 1), channel_id=1,
+        receipt_type="送达确认", receipt_status="送达确认",
+        detail="渠道返回送达确认", registered="2026-11-16 09:05:03",
+    ),
+    _notify_receipt(
+        2, event_id=2, event_no="NEVT-0002", message_no="MSG-0001-0003",
+        idem_key=idempotency_key(1, 3), channel_id=3,
+        receipt_type="送达确认", receipt_status="送达确认",
+        detail="渠道返回送达确认", registered="2026-11-16 09:07:05",
+    ),
+    _notify_receipt(
+        3, event_id=1, event_no="NEVT-0001", message_no="MSG-0001-0001",
+        idem_key=idempotency_key(1, 1), channel_id=1,
+        receipt_type="重复回执", receipt_status="送达确认",
+        detail="渠道重复回调，未新增投递", registered="2026-11-16 09:09:12",
+    ),
+    _notify_receipt(
+        4, event_id=3, event_no="NEVT-0003", message_no="MSG-0002-0001",
+        idem_key=idempotency_key(2, 1), channel_id=1,
+        receipt_type="送达确认", receipt_status="送达确认",
+        detail="渠道返回送达确认", registered="2026-11-16 09:20:04",
+    ),
+    _notify_receipt(
+        5, event_id=5, event_no="NEVT-0005", message_no="MSG-0002-0003",
+        idem_key=idempotency_key(2, 3), channel_id=3,
+        receipt_type="失败回执", receipt_status="失败回执",
+        detail="渠道超时未应答，可从最后尝试继续", registered="2026-11-16 10:02:40",
+    ),
+]
+
+SEED_ROWS["notifybatch"] = [
+    {
+        "id": 1,
+        "批次编号": "BATCH-0001",
+        "提交时间": "2026-11-16 09:00:00",
+        "SLA规则ID列表": [1, 2, 3],
+        "渠道ID列表": [1, 2, 3],
+        "生成事件数": 5,
+        "去重跳过数": 0,
+        "静默抑制数": 1,
+        "状态": "已生成",
+        "事件ID列表": [1, 2, 3, 4, 5],
+    }
+]
+SEED_ROWS["notifyevent"] = _DEMO_EVENTS
+SEED_ROWS["notifyreceipt"] = _DEMO_RECEIPTS
+
+# 预置一份快照：SLA 监控只依据该快照确认升级；快照是事件的不可变深拷贝。
+_SNAPSHOT_EVENTS = [dict(row, 快照版本="SNAP-0001") for row in _DEMO_EVENTS]
+SEED_ROWS["notifyeventsnapshot"] = [
+    {
+        "id": 1,
+        "快照版本": "SNAP-0001",
+        "生成时间": "2026-11-16 09:30:00",
+        "事件总数": 5,
+        "已送达数": 3,
+        "失败数": 1,
+        "静默抑制数": 1,
+        "待投递数": 0,
+        "校验和": "SEED-SNAP-0001",
+        "备注": "初始化示例快照",
+        "events": _SNAPSHOT_EVENTS,
+    }
+]

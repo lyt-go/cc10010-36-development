@@ -232,3 +232,21 @@ class PublishplanEntry(BaseModel):
     field_5: str | None = None  # 发布窗口结束
     field_6: str | None = None  # 审批人
     field_7: str | None = None  # 发布状态
+
+
+class NotifyeventEntry(BaseModel):
+    """通知投递事件明细结构。"""
+
+    field_0: str | None = None  # 事件编号
+    field_1: str | None = None  # 幂等键
+    field_2: str | None = None  # 批次编号
+    field_3: str | None = None  # 规则编号
+    field_4: str | None = None  # 值班组
+    field_5: str | None = None  # 渠道编号
+    field_6: str | None = None  # 消息编号
+    field_7: str | None = None  # 事件状态
+    field_8: str | None = None  # 送达结果
+    field_9: int | None = None  # 投递尝试次数
+    field_10: str | None = None  # 回执编号
+    field_11: str | None = None  # 静默时段结果
+    field_12: str | None = None  # 快照版本

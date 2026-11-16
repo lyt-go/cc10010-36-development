@@ -17,6 +17,7 @@ const Sqltpl = () => import('@/views/sqltpl/index.vue')
 const Backuprestore = () => import('@/views/backuprestore/index.vue')
 const Logarchive = () => import('@/views/logarchive/index.vue')
 const Notifychan = () => import('@/views/notifychan/index.vue')
+const Notifyevent = () => import('@/views/notifyevent/index.vue')
 const Publishplan = () => import('@/views/publishplan/index.vue')
 
 const router = createRouter({
@@ -39,6 +40,7 @@ const router = createRouter({
     { path: '/backuprestore', name: 'backuprestore', component: Backuprestore },
     { path: '/logarchive', name: 'logarchive', component: Logarchive },
     { path: '/notifychan', name: 'notifychan', component: Notifychan },
+    { path: '/notifyevent', name: 'notifyevent', component: Notifyevent },
     { path: '/publishplan', name: 'publishplan', component: Publishplan },
   ],
 })

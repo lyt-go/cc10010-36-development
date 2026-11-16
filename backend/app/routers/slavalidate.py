@@ -4,13 +4,16 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.services.notifyevent import NotifyeventService
 from app.services.slavalidate import SlavalidateService
 
 router = APIRouter(prefix="/api/slavalidate", tags=["SLA监控"])
 
 service = SlavalidateService()
+notifyevent_service = NotifyeventService()
 
 LIST_FIELDS = ["规则编号", "适用作业", "完成截止时间", "预警提前分钟", "超时动作", "升级通知组", "每日频次", "容忍天数"]
 STATUSES = ["草稿", "规则评审中", "已生效", "已关闭"]
@@ -56,6 +59,26 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
+
+
+class SnapshotConfirmPayload(BaseModel):
+    """SLA监控核对升级：只依据通知投递事件快照，不直接读渠道实时数据。"""
+
+    snapshotVersion: int | None = None
+
+
+@router.post("/{entry_id}/confirm-delivery", response_model=ActionResult)
+def confirm_delivery(entry_id: int, payload: SnapshotConfirmPayload) -> ActionResult:
+    """读取通知投递事件快照核对该SLA的异常升级消息、送达结果与静默时段结果。
+
+    确认结果中的每条渠道记录都带消息编号与回执编号，保证跨模块确认来自同一次送达。
+    """
+    result, message = notifyevent_service.confirm_sla_escalation(
+        entry_id, snapshot_version=payload.snapshotVersion
+    )
+    if result is None:
+        return ActionResult(ok=False, message=message)
+    return ActionResult(ok=bool(result["确认通过"]), message=message, entry=result)
 
 
 @router.get("/export")
